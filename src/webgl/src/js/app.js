@@ -20,10 +20,11 @@ class ShaderCinema {
                 "antialias": framebuffer_antialias
             },
             "stats": {"enable": true},
-            "debug": {"log": true},
+            "debug": {"log": false},
             "mandelbrot": {
                 "depth": 256,
-                "zoom_factor": 1.4142
+                "zoom_factor": 1.4142,
+                "invert": true
             }
         };
         this.stats = null;
@@ -46,6 +47,7 @@ class ShaderCinema {
         this.mouse_start = new THREE.Vector2(0.0, 0.0);
         this.mouse_down = false;
         this.mouse_zoom_speed = 0.0;
+        this.mouse_move_speed = new THREE.Vector2(0.0, 0.0);
 
         // Renderer
         this.renderer = new THREE.WebGLRenderer();
@@ -61,7 +63,8 @@ class ShaderCinema {
             iMouse: {type: 'v2', value: this.mouse},
             iViewPortMin: {type: 'v2', value: this.viewport.min},
             iViewPortMax: {type: 'v2', value: this.viewport.max},
-            max_it: {type: "i", value: this.settings.mandelbrot.depth}
+            max_it: {type: "i", value: this.settings.mandelbrot.depth},
+            invert: {type: "b", value: this.settings.mandelbrot.invert}
         };
         this.uniforms_b = {
             iChannel0: {type: 't', value: null}
@@ -112,7 +115,7 @@ class ShaderCinema {
     }
 
     run() {
-        requestAnimationFrame(this.run.bind(this));
+        this._update_uniforms();
         if (this.settings.stats.enable) {
             this.stats.update();
         }
@@ -128,6 +131,7 @@ class ShaderCinema {
         else {
             this.renderer.render(this.scene_a, this.camera_a);
         }
+        requestAnimationFrame(this.run.bind(this));
     }
 
     _onWindowResize() {
@@ -154,8 +158,14 @@ class ShaderCinema {
         this._update_uniforms();
     }
 
-    _set_viewport_size(size) {
-        this.viewport.size = size;
+    _set_viewport_size(size, relative) {
+
+        if (relative) {
+            this.viewport.size += size * this.viewport.size
+        }
+        else {
+            this.viewport.size = size;
+        }
         this._update_viewport();
     }
 
@@ -197,6 +207,7 @@ class ShaderCinema {
         this.uniforms_a.iViewPortMax.value = this.viewport.max;
         this.uniforms_a.iMouse.value = this.mouse;
         this.uniforms_a.max_it.value = this.settings.mandelbrot.depth;
+        this.uniforms_a.invert.value = this.settings.mandelbrot.invert;
 
         if (this.settings.debug.log) {
             console.log("render_target_b = (" + this.renderer.domElement.width + ", " + this.renderer.domElement.height + ")");
@@ -247,6 +258,7 @@ class ShaderCinema {
         const gui_mandelbrot = this.gui.addFolder("Mandelbrot");
         gui_mandelbrot.add(this.settings.mandelbrot, "depth", 1, 1000);
         gui_mandelbrot.add(this.settings.mandelbrot, "zoom_factor", 0, 2);
+        gui_mandelbrot.add(this.settings.mandelbrot, "invert");
         gui_mandelbrot.open();
         this.gui.close();
     }
@@ -261,38 +273,24 @@ class ShaderCinema {
                 this.mouse_start.y = event.clientY / window.innerHeight;
             }
             this.mousedown = true;
-            // this.mouse.x = (event.clientX / window.innerWidth);
-            // this.mouse.y = (event.clientY / window.innerHeight);
-            // this._set_viewport_center(this.mouse.x, this.mouse.y);
-            // if (event.button == 0) {
-            //     this._set_viewport_size(this.viewport.size / this.settings.mandelbrot.zoom_factor);
-            // }
-            // else if (event.button == 2) {
-            //     this._set_viewport_size(this.viewport.size * this.settings.mandelbrot.zoom_factor);
-            // }
-            // console.log("mouse click: " + event.button);
         }.bind(this), false);
 
-        this.container.addEventListener('mouseleave', function (event) {
+        this.container.addEventListener('mouseleave', function () {
             this.mousedown = false;
         }.bind(this), false);
 
-        this.container.addEventListener('mouseup', function (event) {
+        this.container.addEventListener('mouseup', function () {
             this.mousedown = false;
         }.bind(this), false);
 
         this.container.addEventListener('mousemove', function (event) {
             this.mouse.x = (event.clientX / window.innerWidth);
             this.mouse.y = (event.clientY / window.innerHeight);
-            console.log({"mouse_x": this.mouse.x, "mouse_y": this.mouse.y});
 
             if (this.mousedown) {
                 event.preventDefault();
                 let dx = this.mouse.x - this.mouse_start.x;
                 let dy = this.mouse.y - this.mouse_start.y;
-                console.log({"mouse_start_x": this.mouse_start.x, "mouse_start_y": this.mouse_start.y});
-                console.log({"dx": dx, "dy": dy});
-                console.log(dx, dy);
                 this._set_viewport_center(dx, dy, true);
                 this.mouse_start.x = this.mouse.x;
                 this.mouse_start.y = this.mouse.y;
@@ -300,7 +298,8 @@ class ShaderCinema {
         }.bind(this), false);
 
         this.container.addEventListener('wheel', function (event) {
-            console.log(event.deltaY * 0.001);
+            event.preventDefault();
+            this._set_viewport_size(event.deltaY * 0.01, true);
 
         }.bind(this), false);
 
@@ -318,5 +317,5 @@ class ShaderCinema {
 }
 
 
-let shader_cinema = new ShaderCinema(vertex_shader, fragment_shader_a, fragment_shader_b, false, 1024);
+let shader_cinema = new ShaderCinema(vertex_shader, fragment_shader_a, fragment_shader_b, false, 256);
 shader_cinema.run();

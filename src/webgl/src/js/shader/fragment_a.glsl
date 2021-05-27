@@ -6,6 +6,7 @@ uniform vec2  iViewPortMax;
 uniform float iViewPortRatio;
 uniform float iGlobalTime;
 uniform sampler2D iChannel0;
+uniform bool invert;
 
 uniform int max_it;
 
@@ -55,7 +56,7 @@ float f(in vec2 c) {
         }
         z = zn;
     }
-    return 0.0;
+    return 1.0;
 }
 
 /**
@@ -70,6 +71,9 @@ void main() {
     // show working mouse interaction
     // vec3 cm = vec3(0.5*(iMouse.x + iMouse.y));
     float depth = f(uv);
-    vec3 col = vec3(depth, depth, depth);
+    if (invert) {
+        depth = 1.0 - depth;
+    }
+    vec3 col = vec3(depth);
 	gl_FragColor = vec4(col, 1.0);
 }
