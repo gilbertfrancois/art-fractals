@@ -20,7 +20,7 @@ class ShaderCinema {
                 "antialias": framebuffer_antialias
             },
             "stats": {"enable": true},
-            "debug": {"log": false},
+            "debug": {"log": true},
             "mandelbrot": {
                 "depth": 256,
                 "zoom_factor": 1.4142
@@ -38,10 +38,14 @@ class ShaderCinema {
             "center": new THREE.Vector2(0.0, 0.0),
             "min": new THREE.Vector2(-1.0, -1.0),
             "max": new THREE.Vector2(1.0, 1.0),
-            "ratio": 1.0
+            "ratio": 1.0,
+            "width": 2.0,
+            "height": 2.0
         };
-        // Normalized coordinates from the window view: 0.0 ≤ mouse.xy ≤ 1.0.
         this.mouse = new THREE.Vector2(0.5, 0.5);
+        this.mouse_start = new THREE.Vector2(0.0, 0.0);
+        this.mouse_down = false;
+        this.mouse_zoom_speed = 0.0;
 
         // Renderer
         this.renderer = new THREE.WebGLRenderer();
@@ -97,62 +101,14 @@ class ShaderCinema {
             this._toggle_stats();
         }
 
-        // Controls
-        this.gui = new GUI();
-        const gui_settings = this.gui.addFolder("Settings");
-        gui_settings.add(this.settings.framebuffer, "antialias", true).onFinishChange(this._setup_render_target_a.bind(this));;
-        gui_settings.add(this.settings.stats, "enable", true).name("stats").onFinishChange(this._toggle_stats.bind(this));
-        gui_settings.add(this.settings.debug, "log", true).name("debug output");
-        gui_settings.close();
-        const gui_viewport = this.gui.addFolder("Viewport");
-        gui_viewport.add(this.viewport.center, "x", -10, 10, 0.01).onFinishChange(this._update_viewport.bind(this));
-        gui_viewport.add(this.viewport.center, "y", -10, 10, 0.01).onFinishChange(this._update_viewport.bind(this));
-        gui_viewport.add(this.viewport, "size", 0.0001, 10).onFinishChange(this._update_viewport.bind(this));
-        gui_viewport.open();
-        const gui_mandelbrot = this.gui.addFolder("Mandelbrot");
-        gui_mandelbrot.add(this.settings.mandelbrot, "depth", 1, 1000);
-        gui_mandelbrot.add(this.settings.mandelbrot, "zoom_factor", 0, 2);
-        gui_mandelbrot.open();
-        this.gui.close();
-
-        // Listeners
-        window.addEventListener('resize', this._onWindowResize.bind(this));
-        document.addEventListener('mousemove', function (event) {
-            this.mouse.x = (event.clientX / window.innerWidth);
-            this.mouse.y = (event.clientY / window.innerHeight);
-        }.bind(this), false);
-        document.addEventListener('mousedown', function (event) {
-            event.preventDefault();
-            this.mouse.x = (event.clientX / window.innerWidth);
-            this.mouse.y = (event.clientY / window.innerHeight);
-            this._set_viewport_center(this.mouse.x, this.mouse.y);
-            if (event.button == 0) {
-                this._set_viewport_size(this.viewport.size / this.settings.mandelbrot.zoom_factor);
-            }
-            else if (event.button == 2) {
-                this._set_viewport_size(this.viewport.size * this.settings.mandelbrot.zoom_factor);
-            }
-            console.log("mouse click: " + event.button);
-        }.bind(this), false);
+        this._setup_listeners();
+        this._setup_dat_gui();
 
         this._onWindowResize();
     }
 
     _map(src, src_min, src_max, dst_min, dst_max) {
         return (src - src_min) / (src_max - src_min) * (dst_max - dst_min) + dst_min;
-    }
-
-    _set_viewport_center(x, y) {
-        let cx = this._map(x, 0, 1, this.viewport.min.x, this.viewport.max.x);
-        let cy = this._map(y, 0, 1, this.viewport.max.y, this.viewport.min.y);
-        this.viewport.center.x = cx;
-        this.viewport.center.y = cy;
-        this._update_viewport();
-        this._update_uniforms();
-    }
-    _set_viewport_size(size) {
-        this.viewport.size = size;
-        this._update_viewport();
     }
 
     run() {
@@ -183,6 +139,26 @@ class ShaderCinema {
         this._update_uniforms();
     }
 
+    _set_viewport_center(x, y, relative) {
+        if (relative) {
+            this.viewport.center.x -= x * 1.0 * this.viewport.width;
+            this.viewport.center.y += y * 1.0 * this.viewport.height;
+        }
+        else {
+            let cx = this._map(x, 0, 1, this.viewport.min.x, this.viewport.max.x);
+            let cy = this._map(y, 0, 1, this.viewport.max.y, this.viewport.min.y);
+            this.viewport.center.x = cx;
+            this.viewport.center.y = cy;
+        }
+        this._update_viewport();
+        this._update_uniforms();
+    }
+
+    _set_viewport_size(size) {
+        this.viewport.size = size;
+        this._update_viewport();
+    }
+
     _update_viewport() {
         this.viewport.ratio = this.renderer.domElement.width / this.renderer.domElement.height;
         let ratio_xy = new THREE.Vector2(1.0, 1.0);
@@ -196,6 +172,8 @@ class ShaderCinema {
         this.viewport.min.y = this.viewport.center.y - 0.5 * this.viewport.size * ratio_xy.y;
         this.viewport.max.x = this.viewport.center.x + 0.5 * this.viewport.size * ratio_xy.x;
         this.viewport.max.y = this.viewport.center.y + 0.5 * this.viewport.size * ratio_xy.y;
+        this.viewport.width = this.viewport.max.x - this.viewport.min.x;
+        this.viewport.height = this.viewport.max.y - this.viewport.min.y;
         if (this.settings.debug.log) {
             console.log("viewport: min = (" +
                 this.viewport.min.x + " ," + this.viewport.min.y + " ), max = (" +
@@ -252,6 +230,80 @@ class ShaderCinema {
         }
         this._update_viewport();
         this.uniforms_b.iChannel0.value = this.render_target_a.texture;
+    }
+
+    _setup_dat_gui() {
+        this.gui = new GUI();
+        const gui_settings = this.gui.addFolder("Settings");
+        gui_settings.add(this.settings.framebuffer, "antialias", true).onFinishChange(this._setup_render_target_a.bind(this));;
+        gui_settings.add(this.settings.stats, "enable", true).name("stats").onFinishChange(this._toggle_stats.bind(this));
+        gui_settings.add(this.settings.debug, "log", true).name("debug output");
+        gui_settings.close();
+        const gui_viewport = this.gui.addFolder("Viewport");
+        gui_viewport.add(this.viewport.center, "x", -10, 10, 0.01).onFinishChange(this._update_viewport.bind(this));
+        gui_viewport.add(this.viewport.center, "y", -10, 10, 0.01).onFinishChange(this._update_viewport.bind(this));
+        gui_viewport.add(this.viewport, "size", 0.0001, 2).onFinishChange(this._update_viewport.bind(this));
+        gui_viewport.open();
+        const gui_mandelbrot = this.gui.addFolder("Mandelbrot");
+        gui_mandelbrot.add(this.settings.mandelbrot, "depth", 1, 1000);
+        gui_mandelbrot.add(this.settings.mandelbrot, "zoom_factor", 0, 2);
+        gui_mandelbrot.open();
+        this.gui.close();
+    }
+
+    _setup_listeners() {
+        window.addEventListener('resize', this._onWindowResize.bind(this));
+
+        this.container.addEventListener('mousedown', function (event) {
+            event.preventDefault();
+            if (!this.mouse_down) {
+                this.mouse_start.x = event.clientX / window.innerWidth;
+                this.mouse_start.y = event.clientY / window.innerHeight;
+            }
+            this.mousedown = true;
+            // this.mouse.x = (event.clientX / window.innerWidth);
+            // this.mouse.y = (event.clientY / window.innerHeight);
+            // this._set_viewport_center(this.mouse.x, this.mouse.y);
+            // if (event.button == 0) {
+            //     this._set_viewport_size(this.viewport.size / this.settings.mandelbrot.zoom_factor);
+            // }
+            // else if (event.button == 2) {
+            //     this._set_viewport_size(this.viewport.size * this.settings.mandelbrot.zoom_factor);
+            // }
+            // console.log("mouse click: " + event.button);
+        }.bind(this), false);
+
+        this.container.addEventListener('mouseleave', function (event) {
+            this.mousedown = false;
+        }.bind(this), false);
+
+        this.container.addEventListener('mouseup', function (event) {
+            this.mousedown = false;
+        }.bind(this), false);
+
+        this.container.addEventListener('mousemove', function (event) {
+            this.mouse.x = (event.clientX / window.innerWidth);
+            this.mouse.y = (event.clientY / window.innerHeight);
+            console.log({"mouse_x": this.mouse.x, "mouse_y": this.mouse.y});
+
+            if (this.mousedown) {
+                event.preventDefault();
+                let dx = this.mouse.x - this.mouse_start.x;
+                let dy = this.mouse.y - this.mouse_start.y;
+                console.log({"mouse_start_x": this.mouse_start.x, "mouse_start_y": this.mouse_start.y});
+                console.log({"dx": dx, "dy": dy});
+                console.log(dx, dy);
+                this._set_viewport_center(dx, dy, true);
+                this.mouse_start.x = this.mouse.x;
+                this.mouse_start.y = this.mouse.y;
+            }
+        }.bind(this), false);
+
+        this.container.addEventListener('wheel', function (event) {
+            console.log(event.deltaY * 0.001);
+
+        }.bind(this), false);
+
     }
 
     _toggle_stats() {
