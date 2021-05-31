@@ -26,11 +26,15 @@ def fn_test(cx, cy, depth):
             return i / depth;
         x = xn
         y = yn
-    return 0
+    return 1.0
 
 
-def mandelbrot(xmin:float, xmax:float, ymin:float, ymax:float, image_size:int, depth:int, n_workers:int=1, 
+def mandelbrot(xcenter:float, ycenter:float, size:float, image_size:int, depth:int, n_workers:int=1, 
         tile_size:int=100):
+    xmin = xcenter - 0.5*size
+    xmax = xcenter + 0.5*size
+    ymin = ycenter - 0.5*size
+    ymax = ycenter + 0.5*size
     xx = np.linspace(xmin, xmax, image_size)
     yy = np.linspace(ymax, ymin, image_size)
     zz = compute_image(xx, yy, depth, n_workers, tile_size)
@@ -165,6 +169,9 @@ def save_image(data:np.ndarray, cmap:str, output_folder:str, prefix:str, filetyp
     """
     file_path = get_file_path(output_folder, prefix, filetype)
     print(f"Writing image to {file_path}")
+    ones = np.ones_like(data)
+    data = ones - data
+
     matplotlib.image.imsave(file_path, data, cmap=cmap)
 
 def save_data(data:np.ndarray, output_folder, prefix:str) -> None:
@@ -187,10 +194,9 @@ def get_file_path(output_folder:str, prefix:str, filetype:str):
 if __name__ == "__main__":
     # Read the parameters from the config file.
     config = read_config("config.ini")
-    xmin = config.getfloat("xmin")
-    xmax = config.getfloat("xmax")
-    ymin = config.getfloat("ymin")
-    ymax = config.getfloat("ymax")
+    xcenter = config.getfloat("xcenter")
+    ycenter = config.getfloat("ycenter")
+    size = config.getfloat("size")
     depth = config.getint("depth")
     cmap = "gray"
     output_folder = config.get("output_folder")
@@ -201,7 +207,8 @@ if __name__ == "__main__":
     prefix = f"{timestamp}_mandelbrot"
     n_cpus = multiprocessing.cpu_count()
     msg = f"=== Fractals ===\n"
-    msg += f"(xmin, ymin) - (xmax, ymax) = ({xmin}, {ymin}) - ({xmax}, {ymax})\n"
+    msg += f"(xcenter, ycenter): ({xcenter}, {ycenter})\n"
+    msg += f"size: {size}\n"
     msg += f"depth: {depth}\n"
     msg += f"image size: {image_size}x{image_size}\n"
     msg += f"Number of CPUs: {n_cpus}\n"
@@ -209,7 +216,7 @@ if __name__ == "__main__":
     print(msg)
     # Compute the fractal.
     tic = time.time()
-    zz = mandelbrot(xmin, xmax, ymin, ymax, image_size, depth, n_workers=n_cpus)
+    zz = mandelbrot(xcenter, ycenter, size, image_size, depth, n_workers=n_cpus)
     toc = time.time()
     # Post processing.
     save_image(zz, cmap=cmap, output_folder=output_folder, prefix=prefix, filetype=filetype)
