@@ -1,3 +1,5 @@
+precision highp float;
+
 varying vec2  vUv;
 uniform vec2  iMouse;
 uniform vec2  iResolution;
@@ -10,6 +12,9 @@ uniform bool invert;
 
 uniform int max_it;
 
+vec2 add(vec2 dsa, vec2 dsb);
+vec2 sub(vec2 dsa, vec2 dsb);
+vec2 mul(vec2 dsa, vec2 dsb);
 
 /**
  * Helper function: Maps the input vector with min-max range to a destination dimension space.
