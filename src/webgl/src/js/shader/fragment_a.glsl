@@ -44,13 +44,13 @@ vec2 mapn(in vec2 src, in vec2 dst_min, in vec2 dst_max) {
  * Test if a point is inside or outside the Mandelbrot space.
  *
  * @param c   Input value (Re, Im)
- * @returns   Value between 0 and 1, denoting the time it takes to escape the Mandelbrot space. All values == 1 are 
+ 5* @returns   Value between 0 and 1, denoting the time it takes to escape the Mandelbrot space. All values == 1 are 
  *            considered outside.
  */
 float f(in vec2 c) {
     vec2 z = vec2(0.0);
     vec2 zn = vec2(0.0);
-    const int cmax_it = 256;
+    const int cmax_it = 128;
     for (int i = 0; i < cmax_it; i++) {
         zn.x = z.x * z.x - z.y * z.y + c.x;
         zn.y = 2.0 * z.x * z.y + c.y;
@@ -79,6 +79,7 @@ void main() {
     if (invert) {
         depth = 1.0 - depth;
     }
+    depth = floor(depth+0.5);
     vec3 col = vec3(depth);
 	gl_FragColor = vec4(col, 1.0);
 }

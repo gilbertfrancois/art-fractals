@@ -171,7 +171,18 @@ def save_image(data:np.ndarray, cmap:str, output_folder:str, prefix:str, filetyp
     print(f"Writing image to {file_path}")
     ones = np.ones_like(data)
     data = ones - data
-
+    matplotlib.image.imsave(file_path, data, cmap="gray")
+    if cmap == "zebra":
+        pass
+    elif cmap[:4] == "clip":
+        for i in [10, 20, 30, 40, 50, 60, 70, 80, 90]:
+            percent = i / 100
+            clip = np.ones_like(data)
+            data_ = data + percent*clip
+            data_ = np.floor(data_)
+            cmap="gray"
+            file_path = get_file_path(output_folder, f"{prefix}_{cmap}_{i}", filetype)
+            matplotlib.image.imsave(file_path, data_, cmap=cmap)
     matplotlib.image.imsave(file_path, data, cmap=cmap)
 
 def save_data(data:np.ndarray, output_folder, prefix:str) -> None:
@@ -198,7 +209,7 @@ if __name__ == "__main__":
     ycenter = config.getfloat("ycenter")
     size = config.getfloat("size")
     depth = config.getint("depth")
-    cmap = "gray"
+    cmap = config.get("colormap")
     output_folder = config.get("output_folder")
     image_size = config.getint("image_size")
     filetype = config.get("filetype")
